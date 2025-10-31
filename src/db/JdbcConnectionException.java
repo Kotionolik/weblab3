@@ -1,3 +1,5 @@
+package db;
+
 public class JdbcConnectionException extends Exception {
     public JdbcConnectionException () {
 

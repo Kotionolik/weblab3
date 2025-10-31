@@ -1,3 +1,5 @@
+package models;
+
 public class Publication {
     private int id;
     private String title;
