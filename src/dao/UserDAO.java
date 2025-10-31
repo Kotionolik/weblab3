@@ -1,77 +1,82 @@
 package dao;
 
-import models.*;
-import java.sql.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import models.User;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class UserDAO extends DAO {
 
-    private static final String INSERT_USER = "INSERT INTO Users (username, email, password) VALUES (?, ?, ?)";
-    private static final String SELECT_ALL = "SELECT * FROM Users";
-
     public UserDAO() throws DAOException {
-        super();
+        // Конструктор для совместимости
     }
 
     public void addUser(User user) throws DAOException {
-        Connection connection = null;
-        PreparedStatement ps = null;
-        
+        EntityManager em = null;
+
         try {
-            connection = getConnection();
-            ps = connection.prepareStatement(INSERT_USER);
-            
-            ps.setString(1, user.getUsername());
-            ps.setString(2, user.getEmail());
-            ps.setString(3, user.getPassword());
-            
-            int rowsAffected = ps.executeUpdate();
-            
-            if (rowsAffected > 0) {
+            em = getEntityManager();
+
+            executeInTransaction(em, entityManager -> {
+                entityManager.persist(user);
                 logger.info("User '{}' registered successfully", user.getUsername());
                 System.out.println("User registered successfully.");
-            }
-            
-        } catch (SQLException e) {
+                return null;
+            });
+
+        } catch (DAOException e) {
             logger.error("Error while adding user '{}'", user.getUsername(), e);
-            throw new DAOException("Couldn't add user", e);
+            throw e;
         } finally {
-            closeResources(ps, null);
-            releaseConnection(connection);
+            closeEntityManager(em);
         }
     }
 
     public List<User> getUsers() throws DAOException {
-        List<User> list = new ArrayList<>();
-        Connection connection = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-        
+        EntityManager em = null;
+
         try {
-            connection = getConnection();
-            ps = connection.prepareStatement(SELECT_ALL);
-            rs = ps.executeQuery();
-            
-            while (rs.next()) {
-                list.add(new User(
-                        rs.getInt("user_id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        rs.getString("password")
-                ));
-            }
-            
-            logger.info("Got {} users from DB", list.size());
-            
-        } catch (SQLException e) {
+            em = getEntityManager();
+
+            TypedQuery<User> query = em.createNamedQuery("User.findAll", User.class);
+            List<User> users = query.getResultList();
+
+            logger.info("Got {} users from DB", users.size());
+            return users;
+
+        } catch (Exception e) {
             logger.error("Error while getting user list", e);
             throw new DAOException("Couldn't get user list", e);
         } finally {
-            closeResources(ps, rs);
-            releaseConnection(connection);
+            closeEntityManager(em);
         }
-        
-        return list;
+    }
+
+    public User findByUsername(String username) throws DAOException {
+        EntityManager em = null;
+
+        try {
+            em = getEntityManager();
+
+            TypedQuery<User> query = em.createNamedQuery("User.findByUsername", User.class);
+            query.setParameter("username", username);
+
+            List<User> results = query.getResultList();
+
+            if (results.isEmpty()) {
+                return null;
+            }
+
+            logger.info("Found user with username '{}'", username);
+            return results.get(0);
+
+        } catch (Exception e) {
+            logger.error("Error while finding user by username", e);
+            throw new DAOException("Couldn't find user", e);
+        } finally {
+            closeEntityManager(em);
+        }
     }
 }

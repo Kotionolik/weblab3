@@ -1,80 +1,77 @@
 package dao;
 
-import models.*;
-import java.sql.*;
-import java.util.ArrayList;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import models.Publication;
+
 import java.util.List;
 
 public class PublicationDAO extends DAO {
-    private static final String INSERT_PUBLICATION =
-            "INSERT INTO Publications (title, publisher, description, price_per_month) VALUES (?, ?, ?, ?)";
-    private static final String SELECT_ALL_PUBLICATIONS =
-            "SELECT * FROM Publications";
-    
+
     public PublicationDAO() throws DAOException {
-        super();
+        // Конструктор для совместимости
     }
 
     public void addPublication(Publication pub) throws DAOException {
-        Connection connection = null;
-        PreparedStatement ps = null;
-        
+        EntityManager em = null;
+
         try {
-            connection = getConnection();
-            ps = connection.prepareStatement(INSERT_PUBLICATION);
-            
-            ps.setString(1, pub.getTitle());
-            ps.setString(2, pub.getPublisher());
-            ps.setString(3, pub.getDescription());
-            ps.setDouble(4, pub.getPrice());
-            
-            int rowsAffected = ps.executeUpdate();
-            
-            if (rowsAffected > 0) {
+            em = getEntityManager();
+
+            executeInTransaction(em, entityManager -> {
+                entityManager.persist(pub);
                 logger.info("Publication '{}' registered successfully", pub.getTitle());
                 System.out.println("Publication registered successfully.");
-            }
-            
-        } catch (SQLException e) {
+                return null;
+            });
+
+        } catch (DAOException e) {
             logger.error("Error while adding publication '{}'", pub.getTitle(), e);
-            throw new DAOException("Couldn't add publication", e);
+            throw e;
         } finally {
-            closeResources(ps, null);
-            releaseConnection(connection);
+            closeEntityManager(em);
         }
     }
 
     public List<Publication> getAllPublications() throws DAOException {
-        List<Publication> list = new ArrayList<>();
-        Connection connection = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-        
+        EntityManager em = null;
+
         try {
-            connection = getConnection();
-            ps = connection.prepareStatement(SELECT_ALL_PUBLICATIONS);
-            rs = ps.executeQuery();
-            
-            while (rs.next()) {
-                list.add(new Publication(
-                        rs.getInt("publication_id"),
-                        rs.getString("title"),
-                        rs.getString("publisher"),
-                        rs.getString("description"),
-                        rs.getDouble("price_per_month")
-                ));
-            }
-            
-            logger.info("Got {} publications from DB", list.size());
-            
-        } catch (SQLException e) {
+            em = getEntityManager();
+
+            TypedQuery<Publication> query = em.createNamedQuery("Publication.findAll", Publication.class);
+            List<Publication> publications = query.getResultList();
+
+            logger.info("Got {} publications from DB", publications.size());
+            return publications;
+
+        } catch (Exception e) {
             logger.error("Error while getting publication list", e);
             throw new DAOException("Couldn't get publication list", e);
         } finally {
-            closeResources(ps, rs);
-            releaseConnection(connection);
+            closeEntityManager(em);
         }
-        
-        return list;
+    }
+
+    public List<Publication> findByPublisher(String publisher) throws DAOException {
+        EntityManager em = null;
+
+        try {
+            em = getEntityManager();
+
+            TypedQuery<Publication> query = em.createNamedQuery("Publication.findByPublisher", Publication.class);
+            query.setParameter("publisher", publisher);
+
+            List<Publication> publications = query.getResultList();
+
+            logger.info("Found {} publications by publisher '{}'", publications.size(), publisher);
+            return publications;
+
+        } catch (Exception e) {
+            logger.error("Error while finding publications by publisher", e);
+            throw new DAOException("Couldn't find publications", e);
+        } finally {
+            closeEntityManager(em);
+        }
     }
 }
